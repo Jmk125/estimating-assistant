@@ -60,7 +60,7 @@ def query():
     query_text = data.get('query')
 
     # Specify the path to the file server (replace with your actual path)
-    server_path = "/path/to/your/file/server"
+    server_path = "Z:\CM PRECON PROJECTS\Schools\"
 
     # Get all files from the server
     files = get_files_from_server(server_path)
