@@ -1,5 +1,6 @@
 Flask
+transformers
+torch
 pandas
 pdfplumber
-fuzzywuzzy
 gunicorn
