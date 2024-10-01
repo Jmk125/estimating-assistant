@@ -3,4 +3,6 @@ transformers
 torch
 pandas
 pdfplumber
+fuzzywuzzy
 gunicorn
+datasets
