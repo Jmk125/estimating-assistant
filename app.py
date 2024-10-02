@@ -110,8 +110,21 @@ def train():
 
 # Load the fine-tuned model
 def load_fine_tuned_model():
-    model_name = os.path.join(os.getcwd(), "fine_tuned_model")
-    return pipeline("question-answering", model=model_name, tokenizer=model_name)
+    # Use os.path.join to handle paths properly across different operating systems
+    model_dir = os.path.join(os.getcwd(), "fine_tuned_model")
+
+    # Alternatively, replace backslashes with forward slashes for Windows compatibility
+    model_dir = model_dir.replace("\\", "/")
+
+    # Check if the directory exists before loading the model
+    if not os.path.exists(model_dir):
+        raise OSError(f"Model directory {model_dir} not found. Ensure the model has been trained and saved.")
+
+    # Log the contents of the directory before loading
+    print(f"Loading model from {model_dir}. Contents: {os.listdir(model_dir)}")
+    
+    # Load the fine-tuned model and tokenizer from the directory
+    return pipeline("question-answering", model=model_dir, tokenizer=model_dir)
 
 # Route for handling user queries
 @app.route("/ask", methods=["POST"])
