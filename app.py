@@ -61,13 +61,16 @@ def fine_tune_model(train_data):
         start_positions = examples['answers']['answer_start']
 
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
-        encodings.update({'start_positions': start_positions, 'end_positions': start_positions + len(answers)})
+        encodings.update({
+            'start_positions': start_positions,
+            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
+        })
         return encodings
 
     dataset = Dataset.from_pandas(pd.DataFrame(train_data))
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
-    # Training Arguments
+    # Training Arguments with remove_unused_columns=False
     training_args = TrainingArguments(
         output_dir='./results',
         evaluation_strategy="epoch",
@@ -75,6 +78,7 @@ def fine_tune_model(train_data):
         per_device_eval_batch_size=2,
         num_train_epochs=3,
         weight_decay=0.01,
+        remove_unused_columns=False  # Ensure no columns are removed automatically
     )
 
     # Trainer
@@ -85,6 +89,7 @@ def fine_tune_model(train_data):
         eval_dataset=encoded_dataset
     )
 
+    # Start training
     trainer.train()
 
     # Save the fine-tuned model to a directory
@@ -95,7 +100,7 @@ def fine_tune_model(train_data):
     # Log model save status
     if os.path.exists(model_dir):
         print(f"Model saved successfully at {model_dir}")
-        print(f"Files in {model_dir}: {os.listdir(model_dir)}")  # List files in the directory
+        print(f"Files in {model_dir}: {os.listdir(model_dir)}")
     else:
         print(f"Failed to save model at {model_dir}")
 
