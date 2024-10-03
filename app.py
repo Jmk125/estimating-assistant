@@ -151,7 +151,7 @@ def ask_question():
             print("Triggering model training...")  # Log training start
 
             # Update the path to the correct folder that contains subdirectories
-            server_path = r"C:\Users\Joe\Documents\assistanttest"  # Adjust path as necessary
+            server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust path as necessary
             
             # Call the recursive file search
             files = get_files_from_server(server_path)
