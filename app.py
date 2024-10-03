@@ -148,7 +148,7 @@ def ask_question():
         # If the user types "train", trigger the training process
         if question.lower() == "train":
             print("Triggering model training...")  # Log training start
-            server_path = r"C:\Users\Joe\Documents\assistanttest"  # Adjust the path for your data
+            server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust the path for your data
             files = get_files_from_server(server_path)
             print(f"Files found: {files}")  # Log the files found
             train_data = prepare_data_for_training(files)
@@ -160,7 +160,7 @@ def ask_question():
         qa_pipeline = load_fine_tuned_model()
 
         # Extract content from files and create a large context (PDFs, Excel, etc.)
-        server_path = r"C:\Users\Joe\Documents\assistanttest"  # Adjust path as needed
+        server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust path as needed
         files = get_files_from_server(server_path)
         print(f"Files found: {files}")  # Log the files found
 
