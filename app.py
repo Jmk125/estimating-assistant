@@ -35,16 +35,37 @@ def extract_pdf_data(file_path):
 # Prepare data for fine-tuning
 def prepare_data_for_training(files):
     dataset = []
+
     for file in files:
-        if file.endswith(".pdf"):
+        if file.endswith(".txt"):
+            # Extract text data from .txt files
+            with open(file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Example hardcoded question-answer pairs for demo purposes
+            # In practice, you'd extract or generate these from your text data
+            qa_pairs = [
+                {
+                    "context": content,
+                    "question": "What is the main theme of the text?",
+                    "answers": {"text": "Revenge", "answer_start": content.find("Revenge")},
+                },
+                {
+                    "context": content,
+                    "question": "Who is the main character?",
+                    "answers": {"text": "Hamlet", "answer_start": content.find("Hamlet")},
+                },
+            ]
+            dataset.extend(qa_pairs)
+
+        elif file.endswith(".pdf"):
             content = extract_pdf_data(file)
-            # Example question-answer pairs (you'll need to expand this for your data)
             qa_pairs = [
                 {"context": content, "question": "What is the total cost of the project?", "answers": {"text": "50000", "answer_start": content.find("50000")}},
                 {"context": content, "question": "How many units of concrete are required?", "answers": {"text": "200", "answer_start": content.find("200")}},
-                # Add more question-answer pairs as you extract relevant data from files
             ]
             dataset.extend(qa_pairs)
+
     return dataset
 
 # Fine-tune the model on the prepared dataset
