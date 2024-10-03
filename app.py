@@ -18,7 +18,7 @@ def get_files_from_server(server_path):
     for root, dirs, file_names in os.walk(server_path):
         for file_name in file_names:
             file_path = os.path.join(root, file_name)
-            files.append(file_path)
+            files.append(file_path)  # Add full file path
     return files
 
 def extract_excel_data(file_path):
@@ -140,6 +140,7 @@ def load_fine_tuned_model():
 
 # Route for handling user queries
 @app.route("/ask", methods=["POST"])
+@app.route("/ask", methods=["POST"])
 def ask_question():
     try:
         data = request.json
@@ -148,9 +149,21 @@ def ask_question():
         # If the user types "train", trigger the training process
         if question.lower() == "train":
             print("Triggering model training...")  # Log training start
-            server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust the path for your data
+
+            # Update the path to the correct folder that contains subdirectories
+            server_path = r"C:\Users\Joe\Documents\assistanttest"  # Adjust path as necessary
+            
+            # Call the recursive file search
             files = get_files_from_server(server_path)
-            print(f"Files found: {files}")  # Log the files found
+            
+            # Check if files were found
+            if not files:
+                print(f"No files found in {server_path} or its subdirectories.")
+                return jsonify({"error": f"No files found in {server_path} or its subdirectories."}), 400
+            else:
+                print(f"Files found: {files}")  # Log found files to the console
+            
+            # Proceed with training if files are found
             train_data = prepare_data_for_training(files)
             fine_tune_model(train_data)
             return jsonify({"message": "Model fine-tuning complete!"})
@@ -159,28 +172,8 @@ def ask_question():
         print("Loading fine-tuned model...")  # Log model loading
         qa_pipeline = load_fine_tuned_model()
 
-        # Extract content from files and create a large context (PDFs, Excel, etc.)
-        server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust path as needed
-        files = get_files_from_server(server_path)
-        print(f"Files found: {files}")  # Log the files found
-
-        extracted_data = []
-        for file in files:
-            if file.endswith(".xlsx"):
-                extracted_data.extend(extract_excel_data(file))  # Extract Excel data
-            elif file.endswith(".pdf"):
-                extracted_data.append({"content": extract_pdf_data(file)})  # Extract PDF text as a single field
-
-        # Combine the content into one large context
-        context = " ".join([item['content'] for item in extracted_data if 'content' in item])
-        print(f"Context length: {len(context)} characters")  # Log context length
-
-        # Use the model to answer the question
-        result = qa_pipeline(question=question, context=context)
-        print(f"Model result: {result}")  # Log the model result
-
-        return jsonify({"answer": result['answer']})
-
+        # (rest of the code for answering a question)
+    
     except Exception as e:
         print(f"Error occurred: {e}")  # Log any error that occurs
         return jsonify({"error": str(e)}), 500
