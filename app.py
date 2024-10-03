@@ -88,39 +88,25 @@ def fine_tune_model(train_data):
     trainer.train()
 
     # Save the fine-tuned model to a directory
-    model.save_pretrained('./fine_tuned_model')
-    tokenizer.save_pretrained('./fine_tuned_model')
+    model_dir = './fine_tuned_model'
+    model.save_pretrained(model_dir)
+    tokenizer.save_pretrained(model_dir)
 
-# Route to train the model using the files in the server_path
-@app.route("/train", methods=["POST"])
-def train():
-    # Specify the path to the file server
-    server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust path as needed
-    
-    # Get all files from the server
-    files = get_files_from_server(server_path)
-    
-    # Prepare the data for fine-tuning
-    train_data = prepare_data_for_training(files)
-    
-    # Fine-tune the model
-    fine_tune_model(train_data)
-    
-    return jsonify({"message": "Model fine-tuned successfully!"})
+    # Log model save status
+    if os.path.exists(model_dir):
+        print(f"Model saved successfully at {model_dir}")
+        print(f"Files in {model_dir}: {os.listdir(model_dir)}")  # List files in the directory
+    else:
+        print(f"Failed to save model at {model_dir}")
 
 # Load the fine-tuned model
 def load_fine_tuned_model():
-    # Use os.path.join to handle paths properly across different operating systems
-    model_dir = os.path.join(os.getcwd(), "fine_tuned_model")
-
-    # Alternatively, replace backslashes with forward slashes for Windows compatibility
-    model_dir = model_dir.replace("\\", "/")
+    model_dir = os.path.join(os.getcwd(), "fine_tuned_model").replace("\\", "/")
 
     # Check if the directory exists before loading the model
     if not os.path.exists(model_dir):
         raise OSError(f"Model directory {model_dir} not found. Ensure the model has been trained and saved.")
 
-    # Log the contents of the directory before loading
     print(f"Loading model from {model_dir}. Contents: {os.listdir(model_dir)}")
     
     # Load the fine-tuned model and tokenizer from the directory
@@ -129,30 +115,49 @@ def load_fine_tuned_model():
 # Route for handling user queries
 @app.route("/ask", methods=["POST"])
 def ask_question():
-    data = request.json
-    question = data.get('question')
+    try:
+        data = request.json
+        question = data.get('question')
 
-    # Load the fine-tuned model
-    qa_pipeline = load_fine_tuned_model()
+        # If the user types "train", trigger the training process
+        if question.lower() == "train":
+            print("Triggering model training...")  # Log training start
+            server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust the path for your data
+            files = get_files_from_server(server_path)
+            print(f"Files found: {files}")  # Log the files found
+            train_data = prepare_data_for_training(files)
+            fine_tune_model(train_data)
+            return jsonify({"message": "Model fine-tuning complete!"})
 
-    # Extract content from files and create a large context (PDFs, Excel, etc.)
-    server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust path as needed
-    files = get_files_from_server(server_path)
+        # Otherwise, treat it as a question for the model to answer
+        print("Loading fine-tuned model...")  # Log model loading
+        qa_pipeline = load_fine_tuned_model()
 
-    extracted_data = []
-    for file in files:
-        if file.endswith(".xlsx"):
-            extracted_data.extend(extract_excel_data(file))  # Extract Excel data
-        elif file.endswith(".pdf"):
-            extracted_data.append({"content": extract_pdf_data(file)})  # Extract PDF text as a single field
+        # Extract content from files and create a large context (PDFs, Excel, etc.)
+        server_path = r"C:\Users\Joe\Documents\assistanttest"  # Adjust path as needed
+        files = get_files_from_server(server_path)
+        print(f"Files found: {files}")  # Log the files found
 
-    # Combine the content into one large context
-    context = " ".join([item['content'] for item in extracted_data if 'content' in item])
+        extracted_data = []
+        for file in files:
+            if file.endswith(".xlsx"):
+                extracted_data.extend(extract_excel_data(file))  # Extract Excel data
+            elif file.endswith(".pdf"):
+                extracted_data.append({"content": extract_pdf_data(file)})  # Extract PDF text as a single field
 
-    # Use the model to answer the question
-    result = qa_pipeline(question=question, context=context)
-    
-    return jsonify({"answer": result['answer']})
+        # Combine the content into one large context
+        context = " ".join([item['content'] for item in extracted_data if 'content' in item])
+        print(f"Context length: {len(context)} characters")  # Log context length
+
+        # Use the model to answer the question
+        result = qa_pipeline(question=question, context=context)
+        print(f"Model result: {result}")  # Log the model result
+
+        return jsonify({"answer": result['answer']})
+
+    except Exception as e:
+        print(f"Error occurred: {e}")  # Log any error that occurs
+        return jsonify({"error": str(e)}), 500
 
 # Start the Flask app
 if __name__ == "__main__":
