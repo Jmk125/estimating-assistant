@@ -32,6 +32,53 @@ def extract_pdf_data(file_path):
             text += page.extract_text()
     return text
 
+def validate_files(file_list):
+    """
+    Validate the list of files before training.
+    - Check if files exist.
+    - Check if files are non-empty.
+    - Ensure expected extensions (e.g., .txt, .csv, .xlsx).
+    """
+    valid_files = []
+    for file_path in file_list:
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            print(f"Error: File {file_path} does not exist.")
+            continue
+        
+        # Check if the file is non-empty
+        if os.path.getsize(file_path) == 0:
+            print(f"Error: File {file_path} is empty.")
+            continue
+        
+        # Check if the file extension is valid (add extensions you expect to process)
+        if not file_path.endswith(('.txt', '.csv', '.xlsx')):
+            print(f"Error: Invalid file extension for {file_path}.")
+            continue
+
+        # If all checks pass, add the file to the valid list
+        valid_files.append(file_path)
+    
+    return valid_files
+
+
+def train_model_on_files(file_list):
+    """
+    Train the model on valid files.
+    """
+    valid_files = validate_files(file_list)
+    if not valid_files:
+        print("No valid files found. Aborting training.")
+        return
+    
+    print(f"Starting training on {len(valid_files)} files...")
+    # Proceed with training using `valid_files`
+    # Your training code goes here...
+
+# Example usage:
+files_to_train_on = ['data/file1.txt', 'data/file2.xlsx', 'data/file3.csv']
+train_model_on_files(files_to_train_on)
+
 # Prepare data for fine-tuning
 def prepare_data_for_training(files):
     dataset = []
