@@ -32,6 +32,7 @@ def extract_pdf_data(file_path):
             text += page.extract_text()
     return text
 
+# File validation function
 def validate_files(file_list):
     """
     Validate the list of files before training.
@@ -61,7 +62,7 @@ def validate_files(file_list):
     
     return valid_files
 
-
+# Train the model on valid files
 def train_model_on_files(file_list):
     """
     Train the model on valid files.
@@ -69,15 +70,16 @@ def train_model_on_files(file_list):
     valid_files = validate_files(file_list)
     if not valid_files:
         print("No valid files found. Aborting training.")
-        return
-    
-    print(f"Starting training on {len(valid_files)} files...")
-    # Proceed with training using `valid_files`
-    # Your training code goes here...
+        return "No valid files found. Aborting training."
 
-# Example usage:
-files_to_train_on = ['data/file1.txt', 'data/file2.xlsx', 'data/file3.csv']
-train_model_on_files(files_to_train_on)
+    print(f"Starting training on {len(valid_files)} valid files...")
+    
+    # Prepare data for fine-tuning
+    train_data = prepare_data_for_training(valid_files)
+    
+    # Fine-tune the model
+    fine_tune_model(train_data)
+    return "Training completed successfully!"
 
 # Prepare data for fine-tuning
 def prepare_data_for_training(files):
@@ -187,7 +189,6 @@ def load_fine_tuned_model():
 
 # Route for handling user queries
 @app.route("/ask", methods=["POST"])
-@app.route("/ask", methods=["POST"])
 def ask_question():
     try:
         data = request.json
@@ -209,11 +210,10 @@ def ask_question():
                 return jsonify({"error": f"No files found in {server_path} or its subdirectories."}), 400
             else:
                 print(f"Files found: {files}")  # Log found files to the console
-            
-            # Proceed with training if files are found
-            train_data = prepare_data_for_training(files)
-            fine_tune_model(train_data)
-            return jsonify({"message": "Model fine-tuning complete!"})
+
+            # Validate and train the model on valid files
+            response_message = train_model_on_files(files)
+            return jsonify({"message": response_message})
 
         # Otherwise, treat it as a question for the model to answer
         print("Loading fine-tuned model...")  # Log model loading
