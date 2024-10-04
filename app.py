@@ -23,14 +23,20 @@ def get_files_from_server(server_path):
     return files
 
 def extract_excel_data(file_path):
-    # Check file extension and use appropriate engine
-    if file_path.endswith(".xls"):
-        df = pd.read_excel(file_path, engine="xlrd")
-    elif file_path.endswith(".xlsx"):
-        df = pd.read_excel(file_path, engine="openpyxl")
-    else:
-        raise ValueError(f"Unsupported file extension for {file_path}")
-    return df.to_dict(orient='records')
+    try:
+        # Specify engine based on file type
+        if file_path.endswith(".xls"):
+            df = pd.read_excel(file_path, engine="xlrd")
+        elif file_path.endswith(".xlsx"):
+            df = pd.read_excel(file_path, engine="openpyxl")
+        else:
+            raise ValueError(f"Unsupported file extension for {file_path}")
+        
+        return df.to_dict(orient='records')
+
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return None  # Skip file if an error occurs
 
 def extract_pdf_data(file_path):
     with pdfplumber.open(file_path) as pdf:
@@ -77,26 +83,41 @@ def validate_files(file_list):
 
 # Train the model on valid files
 def train_model_on_files(file_list):
-    """
-    Train the model on valid files.
-    """
-    valid_files = validate_files(file_list)
-    if not valid_files:
-        print("No valid files found. Aborting training.")
-        return "No valid files found. Aborting training."
+    try:
+        valid_files = validate_files(file_list)
+        if not valid_files:
+            print("No valid files found. Aborting training.")
+            return jsonify({"message": "No valid files found. Training aborted."})
+        
+        print(f"Starting training on {len(valid_files)} valid files...")
+        
+        train_data = []
+        for file in valid_files:
+            data = None
+            if file.endswith(".xlsx") or file.endswith(".xls"):
+                data = extract_excel_data(file)
+            elif file.endswith(".txt"):
+                data = extract_txt_data(file)  # Assumes a function for .txt data
+            elif file.endswith(".pdf"):
+                data = extract_pdf_data(file)
+            elif file.endswith(".docx") or file.endswith(".doc"):
+                data = extract_docx_data(file)  # Assumes a function for .docx data
+            
+            if data is not None:
+                train_data.extend(data)
 
-    print(f"Starting training on {len(valid_files)} valid files...")
+        if not train_data:
+            print("No valid training data available after extraction.")
+            return jsonify({"message": "No valid training data available."})
+        
+        print(f"Training data prepared. Starting fine-tuning on {len(train_data)} samples...")
+        fine_tune_model(train_data)
+        print("Model training completed successfully.")
+        return jsonify({"message": "Model fine-tuning complete!"})
     
-    # Prepare data for fine-tuning
-    train_data = prepare_data_for_training(valid_files)
-    
-    if not train_data:
-        print("No data prepared for training. Aborting.")
-        return "No data prepared for training. Aborting."
-    
-    # Fine-tune the model
-    fine_tune_model(train_data)
-    return "Training completed successfully!"
+    except Exception as e:
+        print(f"Error occurred during training: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # Prepare data for fine-tuning
 def prepare_data_for_training(files):
