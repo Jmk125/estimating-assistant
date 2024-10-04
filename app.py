@@ -23,8 +23,13 @@ def get_files_from_server(server_path):
     return files
 
 def extract_excel_data(file_path):
-    # This will support both .xls and .xlsx
-    df = pd.read_excel(file_path)
+    # Check file extension and use appropriate engine
+    if file_path.endswith(".xls"):
+        df = pd.read_excel(file_path, engine="xlrd")
+    elif file_path.endswith(".xlsx"):
+        df = pd.read_excel(file_path, engine="openpyxl")
+    else:
+        raise ValueError(f"Unsupported file extension for {file_path}")
     return df.to_dict(orient='records')
 
 def extract_pdf_data(file_path):
