@@ -9,3 +9,4 @@ datasets
 transformers[torch]
 accelerate>=0.26.0
 python-docx
+xlrd
