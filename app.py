@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template
 import os
 import pandas as pd
 import pdfplumber
+import docx
 from transformers import pipeline, DistilBertTokenizerFast, DistilBertForQuestionAnswering, Trainer, TrainingArguments
 from datasets import Dataset
 
@@ -22,6 +23,7 @@ def get_files_from_server(server_path):
     return files
 
 def extract_excel_data(file_path):
+    # This will support both .xls and .xlsx
     df = pd.read_excel(file_path)
     return df.to_dict(orient='records')
 
@@ -32,13 +34,19 @@ def extract_pdf_data(file_path):
             text += page.extract_text()
     return text
 
-# File validation function
+def extract_docx_data(file_path):
+    doc = docx.Document(file_path)
+    full_text = []
+    for paragraph in doc.paragraphs:
+        full_text.append(paragraph.text)
+    return "\n".join(full_text)
+
 def validate_files(file_list):
     """
     Validate the list of files before training.
     - Check if files exist.
     - Check if files are non-empty.
-    - Ensure expected extensions (e.g., .txt, .csv, .xlsx).
+    - Ensure expected extensions (e.g., .txt, .csv, .xls, .xlsx, .pdf, .doc, .docx).
     """
     valid_files = []
     for file_path in file_list:
@@ -52,8 +60,8 @@ def validate_files(file_list):
             print(f"Error: File {file_path} is empty.")
             continue
         
-        # Check if the file extension is valid (add extensions you expect to process)
-        if not file_path.endswith(('.txt', '.csv', '.xlsx')):
+        # Check if the file extension is valid
+        if not file_path.endswith(('.txt', '.csv', '.xls', '.xlsx', '.pdf', '.doc', '.docx')):
             print(f"Error: Invalid file extension for {file_path}.")
             continue
 
@@ -77,6 +85,10 @@ def train_model_on_files(file_list):
     # Prepare data for fine-tuning
     train_data = prepare_data_for_training(valid_files)
     
+    if not train_data:
+        print("No data prepared for training. Aborting.")
+        return "No data prepared for training. Aborting."
+    
     # Fine-tune the model
     fine_tune_model(train_data)
     return "Training completed successfully!"
@@ -86,35 +98,28 @@ def prepare_data_for_training(files):
     dataset = []
 
     for file in files:
+        content = ""
         if file.endswith(".txt"):
-            # Extract text data from .txt files
             with open(file, "r", encoding="utf-8") as f:
                 content = f.read()
-
-            # Example hardcoded question-answer pairs for demo purposes
-            # In practice, you'd extract or generate these from your text data
-            qa_pairs = [
-                {
-                    "context": content,
-                    "question": "What is the main theme of the text?",
-                    "answers": {"text": "Revenge", "answer_start": content.find("Revenge")},
-                },
-                {
-                    "context": content,
-                    "question": "Who is the main character?",
-                    "answers": {"text": "Hamlet", "answer_start": content.find("Hamlet")},
-                },
-            ]
-            dataset.extend(qa_pairs)
-
         elif file.endswith(".pdf"):
             content = extract_pdf_data(file)
+        elif file.endswith((".xls", ".xlsx")):
+            content = str(extract_excel_data(file))  # Convert Excel data to string for now
+        elif file.endswith(".docx"):
+            content = extract_docx_data(file)
+        
+        if content:
+            # Hardcoded QA pairs for demonstration
             qa_pairs = [
-                {"context": content, "question": "What is the total cost of the project?", "answers": {"text": "50000", "answer_start": content.find("50000")}},
-                {"context": content, "question": "How many units of concrete are required?", "answers": {"text": "200", "answer_start": content.find("200")}},
+                {
+                    "context": content,
+                    "question": "What is the main theme of the document?",
+                    "answers": {"text": "Example", "answer_start": content.find("Example")},
+                }
             ]
             dataset.extend(qa_pairs)
-
+    
     return dataset
 
 # Fine-tune the model on the prepared dataset
@@ -138,6 +143,9 @@ def fine_tune_model(train_data):
         return encodings
 
     dataset = Dataset.from_pandas(pd.DataFrame(train_data))
+    if dataset.num_rows == 0:
+        raise ValueError("The dataset is empty. Aborting training.")
+
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
     # Training Arguments with remove_unused_columns=False
@@ -219,7 +227,13 @@ def ask_question():
         print("Loading fine-tuned model...")  # Log model loading
         qa_pipeline = load_fine_tuned_model()
 
-        # (rest of the code for answering a question)
+        # Get the context and answer
+        response = qa_pipeline({
+            'context': "Provide some text context or extracted document data here",
+            'question': question
+        })
+
+        return jsonify(response)
     
     except Exception as e:
         print(f"Error occurred: {e}")  # Log any error that occurs
