@@ -19,12 +19,12 @@ def get_files_from_server(server_path):
     for root, dirs, file_names in os.walk(server_path):
         for file_name in file_names:
             file_path = os.path.join(root, file_name)
-            files.append(file_path)  # Add full file path
+            if not file_path.startswith("~$"):  # Skip temp files
+                files.append(file_path)  # Add full file path
     return files
 
 def extract_excel_data(file_path):
     try:
-        # Specify engine based on file type
         if file_path.endswith(".xls"):
             df = pd.read_excel(file_path, engine="xlrd")
         elif file_path.endswith(".xlsx"):
@@ -36,10 +36,9 @@ def extract_excel_data(file_path):
             raise ValueError(f"Excel file {file_path} is empty or invalid.")
         
         return df.to_dict(orient='records')
-
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
-        return None  # Skip file if an error occurs
+        return None
 
 def extract_pdf_data(file_path):
     try:
@@ -68,29 +67,22 @@ def extract_docx_data(file_path):
         print(f"Error processing {file_path}: {e}")
         return None
 
-# Validate file structure and check extensions
 def validate_files(file_list):
     valid_files = []
     for file_path in file_list:
-        # Skip temporary files (e.g., starting with ~$)
         if os.path.basename(file_path).startswith('~$'):
             print(f"Skipping temporary file: {file_path}")
             continue
-
         if not os.path.exists(file_path):
             print(f"Error: File {file_path} does not exist.")
             continue
-        
         if os.path.getsize(file_path) == 0:
             print(f"Error: File {file_path} is empty.")
             continue
-        
         if not file_path.endswith(('.txt', '.csv', '.xls', '.xlsx', '.pdf', '.doc', '.docx')):
             print(f"Error: Invalid file extension for {file_path}.")
             continue
-
         valid_files.append(file_path)
-    
     return valid_files
 
 def train_model_on_files(file_list):
@@ -136,9 +128,8 @@ def train_model_on_files(file_list):
         print(f"Error occurred during training: {e}")
         return str(e)
 
-# Fine-tune the model on the prepared dataset
 def fine_tune_model(train_data):
-    model_name = "distilbert-base-uncased"  # Pre-trained model
+    model_name = "distilbert-base-uncased"
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
