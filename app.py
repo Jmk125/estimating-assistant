@@ -141,21 +141,24 @@ def fine_tune_model(train_data):
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
-    def preprocess_function(examples):
-        try:
-            questions = [example['question'] for example in examples]
-            contexts = [example['context'] for example in examples]
-            answers = [example['answers']['text'] for example in examples]
-            start_positions = [example['answers']['answer_start'] for example in examples]
+ def preprocess_function(examples):
+    try:
+        questions = [example['question'] for example in examples]
+        contexts = [example['context'] for example in examples]
+        
+        # Ensure answers and start_positions are accessed correctly
+        answers = [example['answers']['text'] if isinstance(example['answers']['text'], str) else example['answers']['text'][0] for example in examples]
+        start_positions = [example['answers']['answer_start'] if isinstance(example['answers']['answer_start'], int) else example['answers']['answer_start'][0] for example in examples]
 
-            encodings = tokenizer(questions, contexts, truncation=True, padding=True)
-            encodings.update({
-                'start_positions': start_positions,
-                'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
-            })
-            return encodings
-        except Exception as e:
-            raise ValueError(f"Error processing examples: {e}")
+        encodings = tokenizer(questions, contexts, truncation=True, padding=True)
+        encodings.update({
+            'start_positions': start_positions,
+            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
+        })
+        return encodings
+    except Exception as e:
+        raise ValueError(f"Error processing examples: {e}")
+
 
     dataset = Dataset.from_pandas(pd.DataFrame(train_data))
     if dataset.num_rows == 0:
