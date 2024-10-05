@@ -135,6 +135,7 @@ def train_model_on_files(file_list):
         return str(e)
 
 # Fine-tune the model on the prepared dataset
+# Fine-tune the model on the prepared dataset
 def fine_tune_model(train_data):
     model_name = "distilbert-base-uncased"  # Pre-trained model
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
@@ -142,10 +143,10 @@ def fine_tune_model(train_data):
 
     # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
-        questions = examples['question']
-        contexts = examples['context']
-        answers = examples['answers']['text']
-        start_positions = examples['answers']['answer_start']
+        questions = [example['question'] for example in examples]
+        contexts = [example['context'] for example in examples]
+        answers = [example['answers']['text'][0] for example in examples]
+        start_positions = [example['answers']['answer_start'][0] for example in examples]
 
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
