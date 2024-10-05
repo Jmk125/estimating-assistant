@@ -70,22 +70,36 @@ def extract_docx_data(file_path):
 
 # Validate file structure and check extensions
 def validate_files(file_list):
+    """
+    Validate the list of files before training.
+    - Check if files exist.
+    - Check if files are non-empty.
+    - Skip temporary files (e.g., starting with `~$`).
+    - Ensure expected extensions (e.g., .txt, .csv, .xls, .xlsx, .pdf, .doc, .docx).
+    """
     valid_files = []
     for file_path in file_list:
-        # Check if the file exists and is non-empty
+        # Skip temporary files (e.g., starting with ~$)
+        if os.path.basename(file_path).startswith('~$'):
+            print(f"Skipping temporary file: {file_path}")
+            continue
+
+        # Check if the file exists
         if not os.path.exists(file_path):
             print(f"Error: File {file_path} does not exist.")
             continue
         
+        # Check if the file is non-empty
         if os.path.getsize(file_path) == 0:
             print(f"Error: File {file_path} is empty.")
             continue
         
-        # Validate extensions
+        # Check if the file extension is valid
         if not file_path.endswith(('.txt', '.csv', '.xls', '.xlsx', '.pdf', '.doc', '.docx')):
             print(f"Error: Invalid file extension for {file_path}.")
             continue
 
+        # If all checks pass, add the file to the valid list
         valid_files.append(file_path)
     
     return valid_files
@@ -136,6 +150,42 @@ def train_model_on_files(file_list):
         return str(e)
 
 # Fine-tune the model on the prepared dataset
+def validate_files(file_list):
+    """
+    Validate the list of files before training.
+    - Check if files exist.
+    - Check if files are non-empty.
+    - Skip temporary files (e.g., starting with `~$`).
+    - Ensure expected extensions (e.g., .txt, .csv, .xls, .xlsx, .pdf, .doc, .docx).
+    """
+    valid_files = []
+    for file_path in file_list:
+        # Skip temporary files (e.g., starting with ~$)
+        if os.path.basename(file_path).startswith('~$'):
+            print(f"Skipping temporary file: {file_path}")
+            continue
+
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            print(f"Error: File {file_path} does not exist.")
+            continue
+        
+        # Check if the file is non-empty
+        if os.path.getsize(file_path) == 0:
+            print(f"Error: File {file_path} is empty.")
+            continue
+        
+        # Check if the file extension is valid
+        if not file_path.endswith(('.txt', '.csv', '.xls', '.xlsx', '.pdf', '.doc', '.docx')):
+            print(f"Error: Invalid file extension for {file_path}.")
+            continue
+
+        # If all checks pass, add the file to the valid list
+        valid_files.append(file_path)
+    
+    return valid_files
+
+# Fine-tune the model on the prepared dataset
 def fine_tune_model(train_data):
     model_name = "distilbert-base-uncased"  # Pre-trained model
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
@@ -143,27 +193,25 @@ def fine_tune_model(train_data):
 
     # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
-        # Process the question and context normally
         questions = [example['question'] for example in examples]
         contexts = [example['context'] for example in examples]
         
-        # Ensure 'answers' is correctly formatted as a list of texts and start positions
         answers = []
         start_positions = []
         
+        # Ensure 'answers' and 'start_positions' are properly handled
         for example in examples:
             answer_text = example['answers']['text']
-            if isinstance(answer_text, str):  # If a single string, wrap it in a list
+            if isinstance(answer_text, str):  # Wrap strings in lists
                 answer_text = [answer_text]
             
             answer_start = example['answers']['answer_start']
-            if isinstance(answer_start, int):  # If single int, wrap it in a list
+            if isinstance(answer_start, int):  # Wrap single integers in lists
                 answer_start = [answer_start]
             
-            answers.append(answer_text[0])  # Take the first answer for simplicity
-            start_positions.append(answer_start[0])  # Take the first position
+            answers.append(answer_text[0])  # Take first answer
+            start_positions.append(answer_start[0])  # Take first start position
         
-        # Tokenize the questions and contexts
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
             'start_positions': start_positions,
@@ -171,15 +219,12 @@ def fine_tune_model(train_data):
         })
         return encodings
 
-    # Convert training data into Dataset format
     dataset = Dataset.from_pandas(pd.DataFrame(train_data))
     if dataset.num_rows == 0:
         raise ValueError("The dataset is empty. Aborting training.")
 
-    # Preprocess dataset
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
-    # Training Arguments with remove_unused_columns=False
     training_args = TrainingArguments(
         output_dir='./results',
         evaluation_strategy="epoch",
@@ -187,10 +232,9 @@ def fine_tune_model(train_data):
         per_device_eval_batch_size=2,
         num_train_epochs=3,
         weight_decay=0.01,
-        remove_unused_columns=False  # Ensure no columns are removed automatically
+        remove_unused_columns=False
     )
 
-    # Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -198,16 +242,13 @@ def fine_tune_model(train_data):
         eval_dataset=encoded_dataset
     )
 
-    # Start training
     trainer.train()
 
-    # Save the fine-tuned model to a directory
     model_dir = './fine_tuned_model'
-    os.makedirs(model_dir, exist_ok=True)  # Create the directory if it doesn't exist
+    os.makedirs(model_dir, exist_ok=True)  # Create directory if it doesn't exist
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
-    # Log model save status
     if os.path.exists(model_dir):
         print(f"Model saved successfully at {model_dir}")
         print(f"Files in {model_dir}: {os.listdir(model_dir)}")
