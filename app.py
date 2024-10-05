@@ -24,19 +24,17 @@ def get_files_from_server(server_path):
 
 def extract_excel_data(file_path):
     try:
-        # Specify engine based on file type
         if file_path.endswith(".xls"):
             df = pd.read_excel(file_path, engine="xlrd")
         elif file_path.endswith(".xlsx"):
             df = pd.read_excel(file_path, engine="openpyxl")
         else:
             raise ValueError(f"Unsupported file extension for {file_path}")
-        
         return df.to_dict(orient='records')
 
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
-        return None  # Skip file if an error occurs
+        return None
 
 def extract_pdf_data(file_path):
     try:
@@ -61,32 +59,18 @@ def extract_docx_data(file_path):
         return None
 
 def validate_files(file_list):
-    """
-    Validate the list of files before training.
-    - Check if files exist.
-    - Check if files are non-empty.
-    - Ensure expected extensions (e.g., .txt, .csv, .xls, .xlsx, .pdf, .doc, .docx).
-    """
     valid_files = []
     for file_path in file_list:
-        # Check if the file exists
         if not os.path.exists(file_path):
             print(f"Error: File {file_path} does not exist.")
             continue
-        
-        # Check if the file is non-empty
         if os.path.getsize(file_path) == 0:
             print(f"Error: File {file_path} is empty.")
             continue
-        
-        # Check if the file extension is valid
         if not file_path.endswith(('.txt', '.csv', '.xls', '.xlsx', '.pdf', '.doc', '.docx')):
             print(f"Error: Invalid file extension for {file_path}.")
             continue
-
-        # If all checks pass, add the file to the valid list
         valid_files.append(file_path)
-    
     return valid_files
 
 # Train the model on valid files
@@ -117,7 +101,7 @@ def train_model_on_files(file_list):
                 qa_pairs = [{
                     "context": str(data),
                     "question": "What is the main content?",
-                    "answers": {"text": "Example answer", "answer_start": str(data).find("Example answer")},
+                    "answers": [{"text": "Example answer", "answer_start": str(data).find("Example answer")}],
                 }]
                 train_data.extend(qa_pairs)
 
@@ -135,23 +119,21 @@ def train_model_on_files(file_list):
         return str(e)
 
 # Fine-tune the model on the prepared dataset
-# Fine-tune the model on the prepared dataset
 def fine_tune_model(train_data):
     model_name = "distilbert-base-uncased"  # Pre-trained model
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
-    # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
         questions = [example['question'] for example in examples]
         contexts = [example['context'] for example in examples]
-        answers = [example['answers']['text'][0] for example in examples]
-        start_positions = [example['answers']['answer_start'][0] for example in examples]
+        answers = [example['answers'][0]['text'] for example in examples]
+        start_positions = [example['answers'][0]['answer_start'] for example in examples]
 
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
             'start_positions': start_positions,
-            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
+            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]
         })
         return encodings
 
@@ -169,7 +151,7 @@ def fine_tune_model(train_data):
         per_device_eval_batch_size=2,
         num_train_epochs=3,
         weight_decay=0.01,
-        remove_unused_columns=False  # Ensure no columns are removed automatically
+        remove_unused_columns=False
     )
 
     # Trainer
@@ -185,10 +167,10 @@ def fine_tune_model(train_data):
 
     # Save the fine-tuned model to a directory
     model_dir = './fine_tuned_model'
+    os.makedirs(model_dir, exist_ok=True)
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
-    # Log model save status
     if os.path.exists(model_dir):
         print(f"Model saved successfully at {model_dir}")
         print(f"Files in {model_dir}: {os.listdir(model_dir)}")
@@ -198,14 +180,9 @@ def fine_tune_model(train_data):
 # Load the fine-tuned model
 def load_fine_tuned_model():
     model_dir = os.path.join(os.getcwd(), "fine_tuned_model").replace("\\", "/")
-
-    # Check if the directory exists before loading the model
     if not os.path.exists(model_dir):
         raise OSError(f"Model directory {model_dir} not found. Ensure the model has been trained and saved.")
-
     print(f"Loading model from {model_dir}. Contents: {os.listdir(model_dir)}")
-    
-    # Load the fine-tuned model and tokenizer from the directory
     return pipeline("question-answering", model=model_dir, tokenizer=model_dir)
 
 # Route for handling user queries
