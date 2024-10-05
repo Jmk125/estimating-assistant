@@ -39,18 +39,26 @@ def extract_excel_data(file_path):
         return None  # Skip file if an error occurs
 
 def extract_pdf_data(file_path):
-    with pdfplumber.open(file_path) as pdf:
-        text = ""
-        for page in pdf.pages:
-            text += page.extract_text()
-    return text
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text()
+        return text
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return None
 
 def extract_docx_data(file_path):
-    doc = docx.Document(file_path)
-    full_text = []
-    for paragraph in doc.paragraphs:
-        full_text.append(paragraph.text)
-    return "\n".join(full_text)
+    try:
+        doc = docx.Document(file_path)
+        full_text = []
+        for paragraph in doc.paragraphs:
+            full_text.append(paragraph.text)
+        return "\n".join(full_text)
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return None
 
 def validate_files(file_list):
     """
@@ -87,7 +95,7 @@ def train_model_on_files(file_list):
         valid_files = validate_files(file_list)
         if not valid_files:
             print("No valid files found. Aborting training.")
-            return jsonify({"message": "No valid files found. Training aborted."})
+            return "No valid files found. Training aborted."
         
         print(f"Starting training on {len(valid_files)} valid files...")
         
@@ -97,56 +105,34 @@ def train_model_on_files(file_list):
             if file.endswith(".xlsx") or file.endswith(".xls"):
                 data = extract_excel_data(file)
             elif file.endswith(".txt"):
-                data = extract_txt_data(file)  # Assumes a function for .txt data
+                with open(file, "r", encoding="utf-8") as f:
+                    data = f.read()
             elif file.endswith(".pdf"):
                 data = extract_pdf_data(file)
             elif file.endswith(".docx") or file.endswith(".doc"):
-                data = extract_docx_data(file)  # Assumes a function for .docx data
+                data = extract_docx_data(file)
             
             if data is not None:
-                train_data.extend(data)
+                # Prepare hardcoded sample data for training
+                qa_pairs = [{
+                    "context": str(data),
+                    "question": "What is the main content?",
+                    "answers": {"text": "Example answer", "answer_start": str(data).find("Example answer")},
+                }]
+                train_data.extend(qa_pairs)
 
         if not train_data:
             print("No valid training data available after extraction.")
-            return jsonify({"message": "No valid training data available."})
+            return "No valid training data available."
         
         print(f"Training data prepared. Starting fine-tuning on {len(train_data)} samples...")
         fine_tune_model(train_data)
         print("Model training completed successfully.")
-        return jsonify({"message": "Model fine-tuning complete!"})
+        return "Model fine-tuning complete!"
     
     except Exception as e:
         print(f"Error occurred during training: {e}")
-        return jsonify({"error": str(e)}), 500
-
-# Prepare data for fine-tuning
-def prepare_data_for_training(files):
-    dataset = []
-
-    for file in files:
-        content = ""
-        if file.endswith(".txt"):
-            with open(file, "r", encoding="utf-8") as f:
-                content = f.read()
-        elif file.endswith(".pdf"):
-            content = extract_pdf_data(file)
-        elif file.endswith((".xls", ".xlsx")):
-            content = str(extract_excel_data(file))  # Convert Excel data to string for now
-        elif file.endswith(".docx"):
-            content = extract_docx_data(file)
-        
-        if content:
-            # Hardcoded QA pairs for demonstration
-            qa_pairs = [
-                {
-                    "context": content,
-                    "question": "What is the main theme of the document?",
-                    "answers": {"text": "Example", "answer_start": content.find("Example")},
-                }
-            ]
-            dataset.extend(qa_pairs)
-    
-    return dataset
+        return str(e)
 
 # Fine-tune the model on the prepared dataset
 def fine_tune_model(train_data):
