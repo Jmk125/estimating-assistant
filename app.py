@@ -85,6 +85,13 @@ def validate_files(file_list):
         valid_files.append(file_path)
     return valid_files
 
+# Debugging: Log structure of train_data before processing
+def debug_train_data(train_data):
+    print("Train data structure before preprocessing:")
+    for item in train_data[:3]:  # Print only first 3 items for brevity
+        print(item)
+
+# Prepare the data for training
 def train_model_on_files(file_list):
     try:
         valid_files = validate_files(file_list)
@@ -119,6 +126,9 @@ def train_model_on_files(file_list):
             print("No valid training data available after extraction.")
             return "No valid training data available."
         
+        # Debug: Check the structure of the training data
+        debug_train_data(train_data)
+        
         print(f"Training data prepared. Starting fine-tuning on {len(train_data)} samples...")
         fine_tune_model(train_data)
         print("Model training completed successfully.")
@@ -128,6 +138,7 @@ def train_model_on_files(file_list):
         print(f"Error occurred during training: {e}")
         return str(e)
 
+# Fine-tune the model on the prepared dataset
 def fine_tune_model(train_data):
     model_name = "distilbert-base-uncased"
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
@@ -195,6 +206,7 @@ def fine_tune_model(train_data):
     else:
         print(f"Failed to save model at {model_dir}")
 
+# Load the fine-tuned model
 def load_fine_tuned_model():
     model_dir = os.path.join(os.getcwd(), "fine_tuned_model").replace("\\", "/")
 
@@ -216,7 +228,6 @@ def ask_question():
 
             server_path = r"Z:\CM PRECON PROJECTS\Schools"
             files = get_files_from_server(server_path)
-
             if not files:
                 return jsonify({"error": f"No files found in {server_path}."}), 400
 
@@ -226,8 +237,11 @@ def ask_question():
         print("Loading fine-tuned model...")
         qa_pipeline = load_fine_tuned_model()
 
+        # You need to provide a valid context from your trained model or data here
+        context = "Provide some valid text context or extracted document data here"
+        
         response = qa_pipeline({
-            'context': "Provide some text context or extracted document data here",
+            'context': context,
             'question': question
         })
 
@@ -237,9 +251,5 @@ def ask_question():
         print(f"Error occurred: {e}")
         return jsonify({"error": str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=5000)
-
-# Start the Flask app
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
