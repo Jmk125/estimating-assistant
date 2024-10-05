@@ -24,17 +24,22 @@ def get_files_from_server(server_path):
 
 def extract_excel_data(file_path):
     try:
+        # Specify engine based on file type
         if file_path.endswith(".xls"):
             df = pd.read_excel(file_path, engine="xlrd")
         elif file_path.endswith(".xlsx"):
             df = pd.read_excel(file_path, engine="openpyxl")
         else:
             raise ValueError(f"Unsupported file extension for {file_path}")
+        
+        if df.empty:
+            raise ValueError(f"Excel file {file_path} is empty or invalid.")
+        
         return df.to_dict(orient='records')
 
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
-        return None
+        return None  # Skip file if an error occurs
 
 def extract_pdf_data(file_path):
     try:
@@ -42,6 +47,8 @@ def extract_pdf_data(file_path):
             text = ""
             for page in pdf.pages:
                 text += page.extract_text()
+        if not text:
+            raise ValueError(f"PDF {file_path} is empty or invalid.")
         return text
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
@@ -53,27 +60,37 @@ def extract_docx_data(file_path):
         full_text = []
         for paragraph in doc.paragraphs:
             full_text.append(paragraph.text)
-        return "\n".join(full_text)
+        text = "\n".join(full_text)
+        if not text:
+            raise ValueError(f"DOCX {file_path} is empty or invalid.")
+        return text
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
         return None
 
+# Validate file structure and check extensions
 def validate_files(file_list):
     valid_files = []
     for file_path in file_list:
+        # Check if the file exists and is non-empty
         if not os.path.exists(file_path):
             print(f"Error: File {file_path} does not exist.")
             continue
+        
         if os.path.getsize(file_path) == 0:
             print(f"Error: File {file_path} is empty.")
             continue
+        
+        # Validate extensions
         if not file_path.endswith(('.txt', '.csv', '.xls', '.xlsx', '.pdf', '.doc', '.docx')):
             print(f"Error: Invalid file extension for {file_path}.")
             continue
+
         valid_files.append(file_path)
+    
     return valid_files
 
-# Train the model on valid files
+# Prepare the data for training
 def train_model_on_files(file_list):
     try:
         valid_files = validate_files(file_list)
@@ -97,11 +114,11 @@ def train_model_on_files(file_list):
                 data = extract_docx_data(file)
             
             if data is not None:
-                # Prepare hardcoded sample data for training
+                # Prepare sample data for training
                 qa_pairs = [{
                     "context": str(data),
                     "question": "What is the main content?",
-                    "answers": [{"text": "Example answer", "answer_start": str(data).find("Example answer")}],
+                    "answers": {"text": "Example answer", "answer_start": str(data).find("Example answer")},
                 }]
                 train_data.extend(qa_pairs)
 
@@ -124,55 +141,28 @@ def fine_tune_model(train_data):
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
-    # Debugging: Check the structure of `train_data`
-    print("Training data sample:", train_data[0] if len(train_data) > 0 else "No data")
-    
-    # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
-        # Debugging: Check each example structure
-        print("Processing example:", examples)
+        try:
+            questions = [example['question'] for example in examples]
+            contexts = [example['context'] for example in examples]
+            answers = [example['answers']['text'] for example in examples]
+            start_positions = [example['answers']['answer_start'] for example in examples]
 
-        questions = [example['question'] for example in examples]
-        contexts = [example['context'] for example in examples]
+            encodings = tokenizer(questions, contexts, truncation=True, padding=True)
+            encodings.update({
+                'start_positions': start_positions,
+                'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
+            })
+            return encodings
+        except Exception as e:
+            raise ValueError(f"Error processing examples: {e}")
 
-        # Ensure `answers` is properly structured
-        answers = []
-        start_positions = []
-
-        for example in examples:
-            # Handle different structures of answers
-            if isinstance(example['answers'], dict):
-                answers.append(example['answers']['text'])
-                start_positions.append(example['answers']['answer_start'])
-            else:
-                raise ValueError(f"Unexpected format in answers: {example['answers']}")
-
-        encodings = tokenizer(questions, contexts, truncation=True, padding=True)
-        encodings.update({
-            'start_positions': start_positions,
-            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]
-        })
-        return encodings
-
-    # Convert the list of dictionaries into a pandas DataFrame, then to a Dataset
-    try:
-        dataset = Dataset.from_pandas(pd.DataFrame(train_data))
-    except Exception as e:
-        print(f"Error creating dataset from training data: {e}")
-        raise e
-
-    # Check if dataset is empty
+    dataset = Dataset.from_pandas(pd.DataFrame(train_data))
     if dataset.num_rows == 0:
         raise ValueError("The dataset is empty. Aborting training.")
 
-    try:
-        # Apply preprocessing to the dataset
-        encoded_dataset = dataset.map(preprocess_function, batched=True)
-    except Exception as e:
-        print(f"Error occurred during dataset preprocessing: {e}")
-        raise e
+    encoded_dataset = dataset.map(preprocess_function, batched=True)
 
-    # Training Arguments with remove_unused_columns=False
     training_args = TrainingArguments(
         output_dir='./results',
         evaluation_strategy="epoch",
@@ -183,7 +173,6 @@ def fine_tune_model(train_data):
         remove_unused_columns=False
     )
 
-    # Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -191,32 +180,26 @@ def fine_tune_model(train_data):
         eval_dataset=encoded_dataset
     )
 
-    # Start training
-    try:
-        trainer.train()
-    except Exception as e:
-        print(f"Error occurred during model training: {e}")
-        raise e
+    trainer.train()
 
-    # Save the fine-tuned model to a directory
     model_dir = './fine_tuned_model'
-    os.makedirs(model_dir, exist_ok=True)
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
-    # Log model save status
     if os.path.exists(model_dir):
         print(f"Model saved successfully at {model_dir}")
-        print(f"Files in {model_dir}: {os.listdir(model_dir)}")
     else:
         print(f"Failed to save model at {model_dir}")
 
 # Load the fine-tuned model
 def load_fine_tuned_model():
     model_dir = os.path.join(os.getcwd(), "fine_tuned_model").replace("\\", "/")
+
     if not os.path.exists(model_dir):
         raise OSError(f"Model directory {model_dir} not found. Ensure the model has been trained and saved.")
-    print(f"Loading model from {model_dir}. Contents: {os.listdir(model_dir)}")
+
+    print(f"Loading model from {model_dir}")
+    
     return pipeline("question-answering", model=model_dir, tokenizer=model_dir)
 
 # Route for handling user queries
@@ -226,32 +209,21 @@ def ask_question():
         data = request.json
         question = data.get('question')
 
-        # If the user types "train", trigger the training process
         if question.lower() == "train":
-            print("Triggering model training...")  # Log training start
+            print("Triggering model training...")
 
-            # Update the path to the correct folder that contains subdirectories
-            server_path = r"Z:\CM PRECON PROJECTS\Schools"  # Adjust path as necessary
-            
-            # Call the recursive file search
+            server_path = r"Z:\CM PRECON PROJECTS\Schools"
             files = get_files_from_server(server_path)
-            
-            # Check if files were found
-            if not files:
-                print(f"No files found in {server_path} or its subdirectories.")
-                return jsonify({"error": f"No files found in {server_path} or its subdirectories."}), 400
-            else:
-                print(f"Files found: {files}")  # Log found files to the console
 
-            # Validate and train the model on valid files
+            if not files:
+                return jsonify({"error": f"No files found in {server_path}."}), 400
+
             response_message = train_model_on_files(files)
             return jsonify({"message": response_message})
 
-        # Otherwise, treat it as a question for the model to answer
-        print("Loading fine-tuned model...")  # Log model loading
+        print("Loading fine-tuned model...")
         qa_pipeline = load_fine_tuned_model()
 
-        # Get the context and answer
         response = qa_pipeline({
             'context': "Provide some text context or extracted document data here",
             'question': question
@@ -260,8 +232,11 @@ def ask_question():
         return jsonify(response)
     
     except Exception as e:
-        print(f"Error occurred: {e}")  # Log any error that occurs
+        print(f"Error occurred: {e}")
         return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True, host='0.0.0.0', port=5000)
 
 # Start the Flask app
 if __name__ == "__main__":
