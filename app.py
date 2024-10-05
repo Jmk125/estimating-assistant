@@ -141,20 +141,20 @@ def fine_tune_model(train_data):
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
-def preprocess_function(examples):
-    try:
+import os
+
+# Fine-tune the model on the prepared dataset
+def fine_tune_model(train_data):
+    model_name = "distilbert-base-uncased"  # Pre-trained model
+    tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
+    model = DistilBertForQuestionAnswering.from_pretrained(model_name)
+
+    # Convert to Hugging Face's dataset format
+    def preprocess_function(examples):
         questions = [example['question'] for example in examples]
         contexts = [example['context'] for example in examples]
-        
-        # Ensure answers and start_positions are accessed correctly
-        answers = [
-            example['answers']['text'] if isinstance(example['answers']['text'], str) else example['answers']['text'][0]
-            for example in examples
-        ]
-        start_positions = [
-            example['answers']['answer_start'] if isinstance(example['answers']['answer_start'], int) else example['answers']['answer_start'][0]
-            for example in examples
-        ]
+        answers = [example['answers']['text'] if isinstance(example['answers']['text'], str) else example['answers']['text'][0] for example in examples]
+        start_positions = [example['answers']['answer_start'] if isinstance(example['answers']['answer_start'], int) else example['answers']['answer_start'][0] for example in examples]
 
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
@@ -162,10 +162,6 @@ def preprocess_function(examples):
             'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
         })
         return encodings
-    except Exception as e:
-        raise ValueError(f"Error processing examples: {e}")
-
-
 
     dataset = Dataset.from_pandas(pd.DataFrame(train_data))
     if dataset.num_rows == 0:
@@ -173,6 +169,7 @@ def preprocess_function(examples):
 
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
+    # Training Arguments with remove_unused_columns=False
     training_args = TrainingArguments(
         output_dir='./results',
         evaluation_strategy="epoch",
@@ -180,9 +177,10 @@ def preprocess_function(examples):
         per_device_eval_batch_size=2,
         num_train_epochs=3,
         weight_decay=0.01,
-        remove_unused_columns=False
+        remove_unused_columns=False  # Ensure no columns are removed automatically
     )
 
+    # Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -190,14 +188,21 @@ def preprocess_function(examples):
         eval_dataset=encoded_dataset
     )
 
+    # Start training
     trainer.train()
 
+    # Ensure the directory exists before saving the model
     model_dir = './fine_tuned_model'
+    os.makedirs(model_dir, exist_ok=True)  # Create directory if it doesn't exist
+
+    # Save the fine-tuned model to a directory
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
+    # Log model save status
     if os.path.exists(model_dir):
         print(f"Model saved successfully at {model_dir}")
+        print(f"Files in {model_dir}: {os.listdir(model_dir)}")
     else:
         print(f"Failed to save model at {model_dir}")
 
