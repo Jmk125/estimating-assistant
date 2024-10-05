@@ -141,21 +141,29 @@ def fine_tune_model(train_data):
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
-import os
-
-# Fine-tune the model on the prepared dataset
-def fine_tune_model(train_data):
-    model_name = "distilbert-base-uncased"  # Pre-trained model
-    tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
-    model = DistilBertForQuestionAnswering.from_pretrained(model_name)
-
     # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
+        # Process the question and context normally
         questions = [example['question'] for example in examples]
         contexts = [example['context'] for example in examples]
-        answers = [example['answers']['text'] if isinstance(example['answers']['text'], str) else example['answers']['text'][0] for example in examples]
-        start_positions = [example['answers']['answer_start'] if isinstance(example['answers']['answer_start'], int) else example['answers']['answer_start'][0] for example in examples]
-
+        
+        # Ensure 'answers' is correctly formatted as a list of texts and start positions
+        answers = []
+        start_positions = []
+        
+        for example in examples:
+            answer_text = example['answers']['text']
+            if isinstance(answer_text, str):  # If a single string, wrap it in a list
+                answer_text = [answer_text]
+            
+            answer_start = example['answers']['answer_start']
+            if isinstance(answer_start, int):  # If single int, wrap it in a list
+                answer_start = [answer_start]
+            
+            answers.append(answer_text[0])  # Take the first answer for simplicity
+            start_positions.append(answer_start[0])  # Take the first position
+        
+        # Tokenize the questions and contexts
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
             'start_positions': start_positions,
@@ -163,10 +171,12 @@ def fine_tune_model(train_data):
         })
         return encodings
 
+    # Convert training data into Dataset format
     dataset = Dataset.from_pandas(pd.DataFrame(train_data))
     if dataset.num_rows == 0:
         raise ValueError("The dataset is empty. Aborting training.")
 
+    # Preprocess dataset
     encoded_dataset = dataset.map(preprocess_function, batched=True)
 
     # Training Arguments with remove_unused_columns=False
@@ -191,11 +201,9 @@ def fine_tune_model(train_data):
     # Start training
     trainer.train()
 
-    # Ensure the directory exists before saving the model
-    model_dir = './fine_tuned_model'
-    os.makedirs(model_dir, exist_ok=True)  # Create directory if it doesn't exist
-
     # Save the fine-tuned model to a directory
+    model_dir = './fine_tuned_model'
+    os.makedirs(model_dir, exist_ok=True)  # Create the directory if it doesn't exist
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
