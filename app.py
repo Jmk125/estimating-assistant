@@ -124,27 +124,53 @@ def fine_tune_model(train_data):
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
+    # Debugging: Check the structure of `train_data`
+    print("Training data sample:", train_data[0] if len(train_data) > 0 else "No data")
+    
     # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
+        # Debugging: Check each example structure
+        print("Processing example:", examples)
+
         questions = [example['question'] for example in examples]
         contexts = [example['context'] for example in examples]
-        
-        # Ensure `answers` is treated as a list of dictionaries with proper structure
-        answers = [example['answers']['text'] if isinstance(example['answers'], dict) else example['answers'] for example in examples]
-        start_positions = [example['answers']['answer_start'] if isinstance(example['answers'], dict) else example['answer_start'] for example in examples]
+
+        # Ensure `answers` is properly structured
+        answers = []
+        start_positions = []
+
+        for example in examples:
+            # Handle different structures of answers
+            if isinstance(example['answers'], dict):
+                answers.append(example['answers']['text'])
+                start_positions.append(example['answers']['answer_start'])
+            else:
+                raise ValueError(f"Unexpected format in answers: {example['answers']}")
 
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
             'start_positions': start_positions,
-            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
+            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]
         })
         return encodings
 
-    dataset = Dataset.from_pandas(pd.DataFrame(train_data))
+    # Convert the list of dictionaries into a pandas DataFrame, then to a Dataset
+    try:
+        dataset = Dataset.from_pandas(pd.DataFrame(train_data))
+    except Exception as e:
+        print(f"Error creating dataset from training data: {e}")
+        raise e
+
+    # Check if dataset is empty
     if dataset.num_rows == 0:
         raise ValueError("The dataset is empty. Aborting training.")
 
-    encoded_dataset = dataset.map(preprocess_function, batched=True)
+    try:
+        # Apply preprocessing to the dataset
+        encoded_dataset = dataset.map(preprocess_function, batched=True)
+    except Exception as e:
+        print(f"Error occurred during dataset preprocessing: {e}")
+        raise e
 
     # Training Arguments with remove_unused_columns=False
     training_args = TrainingArguments(
@@ -154,7 +180,7 @@ def fine_tune_model(train_data):
         per_device_eval_batch_size=2,
         num_train_epochs=3,
         weight_decay=0.01,
-        remove_unused_columns=False  # Ensure no columns are removed automatically
+        remove_unused_columns=False
     )
 
     # Trainer
@@ -166,7 +192,11 @@ def fine_tune_model(train_data):
     )
 
     # Start training
-    trainer.train()
+    try:
+        trainer.train()
+    except Exception as e:
+        print(f"Error occurred during model training: {e}")
+        raise e
 
     # Save the fine-tuned model to a directory
     model_dir = './fine_tuned_model'
