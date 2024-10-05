@@ -124,16 +124,19 @@ def fine_tune_model(train_data):
     tokenizer = DistilBertTokenizerFast.from_pretrained(model_name)
     model = DistilBertForQuestionAnswering.from_pretrained(model_name)
 
+    # Convert to Hugging Face's dataset format
     def preprocess_function(examples):
         questions = [example['question'] for example in examples]
         contexts = [example['context'] for example in examples]
-        answers = [example['answers'][0]['text'] for example in examples]
-        start_positions = [example['answers'][0]['answer_start'] for example in examples]
+        
+        # Ensure `answers` is treated as a list of dictionaries with proper structure
+        answers = [example['answers']['text'] if isinstance(example['answers'], dict) else example['answers'] for example in examples]
+        start_positions = [example['answers']['answer_start'] if isinstance(example['answers'], dict) else example['answer_start'] for example in examples]
 
         encodings = tokenizer(questions, contexts, truncation=True, padding=True)
         encodings.update({
             'start_positions': start_positions,
-            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]
+            'end_positions': [start + len(answer) for start, answer in zip(start_positions, answers)]  # Calculate end positions
         })
         return encodings
 
@@ -151,7 +154,7 @@ def fine_tune_model(train_data):
         per_device_eval_batch_size=2,
         num_train_epochs=3,
         weight_decay=0.01,
-        remove_unused_columns=False
+        remove_unused_columns=False  # Ensure no columns are removed automatically
     )
 
     # Trainer
@@ -171,6 +174,7 @@ def fine_tune_model(train_data):
     model.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
+    # Log model save status
     if os.path.exists(model_dir):
         print(f"Model saved successfully at {model_dir}")
         print(f"Files in {model_dir}: {os.listdir(model_dir)}")
